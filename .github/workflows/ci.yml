@@ -1,0 +1,25 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    name: the demo runs end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: run the demo
+        run: |
+          out="$(python3 bin/demo)"
+          echo "$out"
+          grep -q 'binding: VERIFIED' <<<"$out"
+          grep -q 'result matches committed examples/raven-03.descriptor.json: yes' <<<"$out"
+          grep -q 'REJECTED  <- tamper caught' <<<"$out"
+      - name: setup re-mints the cert
+        run: rm -rf .cert && python3 bin/setup

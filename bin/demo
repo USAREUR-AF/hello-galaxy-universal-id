@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""hello-galaxy-universal-id — the demo.
+
+One identity (RAVEN-03), three platforms that share nothing but the standard,
+one re-task-organization, and the as-of-date traceability payoff. Shown, not told.
+
+    python3 bin/demo
+
+No third-party dependencies. A real X.509 cert is minted via openssl for the
+spine binding; if openssl is absent the binding step is reported as skipped and
+everything else still runs.
+"""
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from lib import descriptor, registry, cert, docsig    # noqa: E402
+from platforms import platform_a, platform_b, platform_c  # noqa: E402
+
+# Pinned reference times so the demo tells the same story whenever it is run
+# (effective-dated resolution is time-relative; we don't lean on the wall clock).
+BEFORE_AT = datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc)   # while falcon is the live parent
+T = "2026-06-12T12:00:00Z"                                    # the reorg happens here
+NOW = datetime(2026, 6, 18, 0, 0, tzinfo=timezone.utc)        # "current", after the reorg
+E = datetime(2026, 6, 5, 9, 0, tzinfo=timezone.utc)           # a past audit event, before T
+EXAMPLE = os.path.join(ROOT, "examples", "raven-03.descriptor.json")
+
+
+def hr(c="-"):
+    print(c * 72)
+
+
+def short(urn):
+    return urn.split("org=")[-1] if urn else None
+
+
+def run_platforms(desc, as_of=None, label=""):
+    for res in (platform_a.decision(desc, as_of),
+                platform_b.authorize(desc, "sensor-feeds", as_of),
+                platform_c.releasable(desc, as_of)):
+        tag = "↻" if res["affected_by_reorg"] else " "
+        print(f"  {tag} {res['platform']:<20} [{res['binds_to']:<16}] {res['result']}")
+
+
+def main():
+    print()
+    print("hello-galaxy-universal-id — one descriptor, three platforms, one reorg")
+    hr("=")
+
+    before = registry.seed_before()
+    uuid = descriptor.uuid(before)
+
+    # --- spine: a real cert binding -------------------------------------------
+    print("\n[spine] persistent identity (immutable, cert-anchored)")
+    try:
+        crt = cert.ensure_cert(uuid, descriptor.urn(before))
+        ok, detail = cert.verify_binding(before, crt)
+        print(f"  cert CN <-> UUID binding: {'VERIFIED' if ok else 'MISMATCH'}  ({detail})")
+        print(f"  (real self-signed X.509 at .cert/{uuid}.crt)")
+    except FileNotFoundError:
+        print("  [skipped] openssl not found — binding is real when openssl is present")
+    print(f"  uuid       : {uuid}   <- never changes, never reused")
+    print(f"  urn        : {descriptor.urn(before)}   <- born-as affiliation stamp (frozen)")
+
+    # --- BEFORE the reorg -----------------------------------------------------
+    print(f"\n[before reorg]  current parent = {short(descriptor.resolve_parent(before, as_of=BEFORE_AT))}")
+    run_platforms(before, as_of=BEFORE_AT)
+
+    # --- the reorg: a registry edit, NOT a re-mint ----------------------------
+    hr()
+    print(f"[event] RAVEN-03 re-task-organized -> condor-bde at T={T}")
+    print("        this is a REGISTRY EDIT. the cert is not touched.")
+    after = registry.retask(before, registry.CONDOR, at=T)
+
+    # validate the edit produced exactly the committed candidate artifact
+    committed = descriptor.load(EXAMPLE)
+    match = descriptor.edge_tuples(after) == descriptor.edge_tuples(committed)
+    print(f"        result matches committed examples/raven-03.descriptor.json: "
+          f"{'yes' if match else 'NO'}")
+    hr()
+
+    # --- AFTER the reorg ------------------------------------------------------
+    print(f"\n[after reorg]   current parent = {short(descriptor.resolve_parent(after, as_of=NOW))}")
+    print(f"                uuid unchanged: {descriptor.uuid(after) == uuid}  "
+          f"(identity did not move)")
+    run_platforms(after, as_of=NOW)
+    print("  -> only Platform C (graph-bound) flipped. A and B are coherent and unchanged.")
+
+    # --- traceability: as-of a past audit event -------------------------------
+    print(f"\n[traceability]  audit event logged {E.isoformat()} (before T)")
+    print(f"                'who did RAVEN-03 report to then?' -> "
+          f"{short(descriptor.resolve_parent(after, as_of=E))}  "
+          f"(not the current parent — effective-dated walk)")
+    rc = platform_c.releasable(after, as_of=E)
+    print(f"                Platform C as-of that event: {rc['result']}")
+
+    # --- v1.1: the staleness hazard + the consistency-token fix ----------------
+    # The cross-industry review's sharpest finding: a portable doc embedding a
+    # mutable graph recreates Zanzibar's "new enemy" — a grant decided off a
+    # snapshot staler than the truth wrongly GRANTS. Shown, then fixed.
+    hr()
+    print("[v1.1 freshness]  the 'new enemy' staleness hazard, and the consistency-token fix")
+    # A consumer cached the post-condor snapshot (releasable). Then a SECOND reorg
+    # moved RAVEN-03 back under falcon-bde (no longer a shared partner).
+    reg = registry.Registry(after)                               # live: zk:2, parent=condor
+    cached = reg.resolve_live()                                  # consumer caches zk:2
+    reg.retask(registry.FALCON, at="2026-06-16T12:00:00Z")       # live advances: zk:3, parent=falcon (before NOW)
+    print(f"  decision time = {NOW.date()}; consumer holds cached snapshot "
+          f"{descriptor.snapshot_token(cached)} (parent=condor, a shared partner)")
+    print(f"  registry has since advanced to {reg.current_token()} (a 2nd reorg moved RAVEN-03 back to falcon-bde)")
+    naive = platform_c.grant_naive(cached, as_of=NOW)
+    print(f"  NAIVE grant off the cache : {naive[0]:<5}  <- WRONG (new enemy) — {naive[1]}")
+    fixed = platform_c.grant(cached, reg, as_of=NOW)
+    print(f"  v1.1 grant (token-checked): {fixed[0]:<5}  <- correct — {fixed[1]}")
+
+    # --- v1.2: offline document signing (the second trust root) ----------------
+    # The cert vouches for the spine; the registry signature vouches for the
+    # dynamic attributes. An external partner with only the document + the
+    # registry pubkey verifies BOTH offline — no call back to us.
+    hr()
+    print("[v1.2 signing]  the registry signs the document; a partner verifies it offline")
+    try:
+        signed = dict(after)
+        signed["sig"] = docsig.sign(signed)                       # registry signs canonical doc
+        ok = docsig.verify(signed, signed["sig"])
+        print(f"  registry-signed `sig` present; partner offline-verify: {'VALID' if ok else 'INVALID'}")
+        tampered = json.loads(json.dumps(signed))                 # deep copy
+        tampered["attributes"]["edges"][-1]["to"] = "urn:goat:zagros:org=ATTACKER"
+        bad = docsig.verify(tampered, signed["sig"])
+        print(f"  tamper one edge target, re-verify with same sig: {'VALID' if bad else 'REJECTED'}  <- tamper caught")
+    except FileNotFoundError:
+        print("  [skipped] openssl not found — signing is real when openssl is present")
+
+    # --- what this proved -----------------------------------------------------
+    hr("=")
+    print("proved: spine immutable across reorg; relationship changed with zero cert churn;")
+    print("        heterogeneous platforms enforced coherently off one portable descriptor;")
+    print("        current + historical answered from one effective-dated graph;")
+    print("        v1.1 — a stale snapshot can't wrongly grant: the consistency token")
+    print("        forces grant decisions to fresh data (Zanzibar zookie discipline);")
+    print("        v1.2 — the document is offline-verifiable: the registry signature")
+    print("        proves the dynamic attributes, the cert proves the spine, no callback.")
+    print()
+
+
+if __name__ == "__main__":
+    main()

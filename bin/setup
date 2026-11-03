@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Mint the throwaway X.509 cert the demo uses for its real spine binding.
+
+Optional — `bin/demo` mints it on first run if absent. Run this to pre-mint or
+to re-mint after `rm -rf .cert`.
+
+    python3 bin/setup
+"""
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from lib import cert, registry  # noqa: E402
+
+
+def main():
+    uuid = registry.RAVEN03_UUID
+    urn = registry.RAVEN03_URN
+    try:
+        crt = cert.ensure_cert(uuid, urn)
+    except FileNotFoundError:
+        print("openssl not found — install it for the real cert binding step", file=sys.stderr)
+        sys.exit(1)
+    ok, detail = cert.verify_binding({"spine": {"uuid": uuid, "urn": urn}}, crt)
+    print(f"minted {crt}")
+    print(f"binding {'VERIFIED' if ok else 'MISMATCH'}: {detail}")
+
+
+if __name__ == "__main__":
+    main()

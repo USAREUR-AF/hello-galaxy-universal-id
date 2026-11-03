@@ -1,0 +1,60 @@
+{
+  "schema": "goat.identity.descriptor/v1",
+  "_note": "CANDIDATE artifact under test — follows goatcore docs/design/identity-descriptor-standard.md. Values are illustrative.",
+
+  "spine": {
+    "uuid": "e7a9c75b532e3d434bb09fefd3ce1ec7",
+    "goatnet": "zagros",
+    "urn": "urn:goat:zagros:org=e7a9c75b532e3d434bb09fefd3ce1ec7",
+    "slot_index": 14,
+    "cert_fingerprint": "sha256:PLACEHOLDER-rotates-anchor-is-constant"
+  },
+
+  "attributes": {
+    "resolved_at": "2026-06-12T12:05:00Z",
+    "registry_snapshot": "zk:2",
+    "registry_ref": "https://portal.example/api/identity/e7a9c75b532e3d434bb09fefd3ce1ec7",
+    "_note_freshness": "v1.1: resolved_at + opaque registry_snapshot (zookie analog) + fetch-fresh pointer. Grant decisions require bounded staleness or a live query; display/forensic reads may use the cache.",
+    "alias": "raven-03",
+    "display_name": "RAVEN-03 — autonomous sensor platform",
+    "grammar": {
+      "role": "OPERATOR",
+      "affiliation": { "kind": "organic", "value": "raven-03" },
+      "echelon": "COMPONENT",
+      "node_class": "PLATFORM",
+      "autonomy": "autonomous",
+      "site": "zagros"
+    },
+    "edges": [
+      {
+        "rel": "parent",
+        "to": "urn:goat:zagros:org=falcon-bde",
+        "from": "2026-05-01T00:00:00Z",
+        "to_date": "2026-06-12T12:00:00Z",
+        "recorded_at": "2026-05-01T00:03:00Z",
+        "_note": "valid-time [from,to_date); recorded_at = transaction-time (when we learned it). Closed at T."
+      },
+      {
+        "rel": "parent",
+        "to": "urn:goat:zagros:org=condor-bde",
+        "from": "2026-06-12T12:00:00Z",
+        "to_date": null,
+        "recorded_at": "2026-06-12T12:04:00Z",
+        "_note": "open = current parent after the reorg"
+      }
+    ]
+  },
+
+  "provenance": {
+    "uuid":        { "source": "cert",     "authority": "born-as" },
+    "urn":         { "source": "cert",     "authority": "born-as" },
+    "affiliation": { "source": "registry", "authority": "currently-is" },
+    "edges":       { "source": "registry", "authority": "currently-is" },
+    "role":        { "source": "registry", "authority": "currently-is" }
+  },
+
+  "extensions": {
+    "x-hello-galaxy/scenario": "series-3-universal-id",
+    "x-hello-galaxy/note": "vendor names in this repo are invented and denote integration patterns"
+  }
+}
