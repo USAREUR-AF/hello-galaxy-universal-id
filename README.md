@@ -1,5 +1,10 @@
 # hello-galaxy: Universal identity
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/one-record-dark.svg">
+  <img src="docs/figures/one-record-light.svg" width="760" alt="One identity record for raven-03 (uuid e7a9c75b…) is read by three platforms. Its parent moves from falcon-bde to condor-bde by a registry edit, with no new certificate. The uuid does not change; the Zenoh fabric's write namespace and the analytics service's role decision stay the same; the partner C2's releasability changes from no to YES. Asked about an audit event before the reorg, the record still answers falcon-bde.">
+</picture>
+
 **One portable identity descriptor, consumed and enforced the same way across
 platforms that share nothing else — shown, not told.**
 
